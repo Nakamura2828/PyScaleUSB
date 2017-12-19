@@ -3,8 +3,11 @@ from __future__ import print_function
 import hid
 import time
 import sys
+from struct import *
 
 DEBUG = False
+
+grams_per_oz = 28.3495
 
 def restart_line():
     sys.stdout.write('\r')
@@ -17,9 +20,7 @@ class Scale:
         if vid < 0 or pid < 0:
             for d in hid.enumerate():
                 keys = list(d.keys())
-                # TODO add support for Radio shack USB scale (d['vendor_id'] == '8755' and d['product_id'] == '25379'):
                 if d['vendor_id'] == 8755 and d['product_id'] == 25379:
-                    print("I don't support RadioShack USB scales yet")
                     self.myDevice = RadioShackScale()
                     return
                 if ('usage' not in keys or 'usage_page' not in keys or not (
@@ -60,15 +61,32 @@ class RadioShackScale(Scale):
             print("Couldn't connect to scale")
 
     def read(self):
-        print("can't read yet")
+        tare_offset = 1363.6
+        scale_factor = 2.571181854
+
+        window_size = 5
+        samples = []
+
         try:
             reading = self.device.read(64)
             if reading:
-                #self.unit = {2:'g',11:'oz'}[reading[2]]
-                #self.value = reading[5] << 8 | reading[4]  # 5th bit MSD, 4th bit LSD
-                #return {'value':self.value, 'unit':self.unit}
-                print(reading)
-                return {'value':-1,'unit':'?'}
+                samples.append(unpack('>h', pack('>H', reading[6] << 8 | reading[7]))[
+                                   0])  # append new samples (each sample converts the last two bytes to an unsigned big-endian short)_
+                if (len(samples) > window_size):
+                    samples.pop(0)  # remove old samples
+
+                metric = False
+
+                self.value = int((sum(samples) / len(samples) + tare_offset) / scale_factor)  # calculate moving average
+
+                if metric:
+                    self.unit = 'g'
+                else:
+                    self.unit = 'oz'
+                    self.value = round(self.value / grams_per_oz, 1)
+
+                #print(reading)
+                return {'value':self.value,'unit':self.unit}
             else:
                 return {'value':-1,'unit':'?'}
         except IOError as ex:
@@ -116,7 +134,7 @@ def main():
                 break
 
            sys.stdout.flush()
-           time.sleep(0.1)
+           time.sleep(0.5)
            restart_line()
     except OSError as ex:
         print(ex);
