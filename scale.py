@@ -70,8 +70,8 @@ class RadioShackScale(Scale):
         try:
             reading = self.device.read(64)
             if reading:
-                samples.append(unpack('>h', pack('>H', reading[6] << 8 | reading[7]))[
-                                   0])  # append new samples (each sample converts the last two bytes to an unsigned big-endian short)_
+                # append new samples (each sample converts the last two bytes to an unsigned big-endian short)_
+                samples.append(unpack('>h', pack('>H', reading[6] << 8 | reading[7]))[0])
                 if (len(samples) > window_size):
                     samples.pop(0)  # remove old samples
 
