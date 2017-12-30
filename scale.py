@@ -78,6 +78,11 @@ class RadioShackScale(Scale):
         self.vid = 8755
         self.pid = 25379
 
+        self.status = ''
+        self.unit = ''
+        self.scale_factor = 0
+        self.value = 0
+
         self.device = hid.device()
         try:
             self.device.open(self.vid, self.pid)
@@ -97,7 +102,7 @@ class RadioShackScale(Scale):
             if reading:
                 # append new samples (each sample converts the last two bytes to an unsigned big-endian short)_
                 samples.append(unpack('>h', pack('>H', reading[6] << 8 | reading[7]))[0])
-                if (len(samples) > window_size):
+                if len(samples) > window_size:
                     samples.pop(0)  # remove old samples
 
                 metric = False
@@ -123,6 +128,11 @@ class StandardHIDScale(Scale):
     def __init__(self, vid, pid):
         self.vid = vid
         self.pid = pid
+
+        self.status = ''
+        self.unit = ''
+        self.scale_factor = 0
+        self.value = 0
 
         self.device = hid.device()
         try:
