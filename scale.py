@@ -7,11 +7,35 @@ from struct import *
 
 DEBUG = False
 
+scale_status = {1: 'Scale Status Fault',
+                2: 'Scale Status Stable at Zero',
+                3: 'Scale Status In Motion',
+                4: 'Scale Status Weight Stable',
+                5: 'Scale Status Under Zero',
+                6: 'Scale Status Over Weight Limit',
+                7: 'Scale Status Requires Calibration',
+                8: 'Scale Status Requires Re-zeroing'}
+
+scale_units = {1: 'mg',
+               2: 'g',
+               3: 'kg',
+               4: 'Carats',
+               5: 'Taels',
+               6: 'Grains',
+               7: 'Pennyweights',
+               8: 'metric tons',
+               9: 'avoir tons',
+               10: 'troy oz',
+               11: 'oz',
+               12: 'lb'}
+
 grams_per_oz = 28.3495
 
+
 def restart_line():
-    sys.stdout.write('\r')
+    sys.stdout.write("\r")
     sys.stdout.flush()
+
 
 class Scale:
     def __init__(self, vid=-1, pid=-1):
@@ -24,7 +48,7 @@ class Scale:
                     self.myDevice = RadioShackScale()
                     return
                 if ('usage' not in keys or 'usage_page' not in keys or not (
-                        d['usage'] == 32 and d['usage_page'] == 141)):  # Find HID weighing devices
+                                d['usage'] == 32 and d['usage_page'] == 141)):  # Find HID weighing devices
                     continue
 
                 if DEBUG == True:
@@ -42,11 +66,12 @@ class Scale:
             self.vid = vid
             self.pid = pid
 
-        self.myDevice = StandardHIDScale(self.vid,self.pid)
+        self.myDevice = StandardHIDScale(self.vid, self.pid)
         self.type = 'StandardHIDScale'
 
     def read(self):
         return self.myDevice.read()
+
 
 class RadioShackScale(Scale):
     def __init__(self):
@@ -76,7 +101,7 @@ class RadioShackScale(Scale):
                     samples.pop(0)  # remove old samples
 
                 metric = False
-
+                self.status = '?'
                 self.value = int((sum(samples) / len(samples) + tare_offset) / scale_factor)  # calculate moving average
 
                 if metric:
@@ -85,13 +110,14 @@ class RadioShackScale(Scale):
                     self.unit = 'oz'
                     self.value = round(self.value / grams_per_oz, 1)
 
-                #print(reading)
-                return {'value':self.value,'unit':self.unit}
+                # print(reading)
+                return {'value': self.value, 'unit': self.unit, 'status': self.status}
             else:
-                return {'value':-1,'unit':'?'}
+                return {'value': -1, 'unit': '?'}
         except IOError as ex:
             print(ex)
             print("Couldn't read from scale")
+
 
 class StandardHIDScale(Scale):
     def __init__(self, vid, pid):
@@ -107,15 +133,20 @@ class StandardHIDScale(Scale):
 
     def read(self):
         try:
-            reading = self.device.read(64)
-            if reading:
-                self.unit = {2:'g',11:'oz'}[reading[2]]
-                self.value = reading[5] << 8 | reading[4]  # 5th bit MSD, 4th bit LSD
-                if self.unit == 'oz':
-                    self.value /= 10
-                return {'value':self.value, 'unit':self.unit}
+            reading = self.device.read(48)
+            if reading[0] == 3:  # 1st byte = weight report
+                self.status = scale_status[reading[1]]  # 2nd byte = status
+                self.unit = scale_units[reading[2]]  # 3rd byte = unit
+                self.scale_factor = unpack('b', pack('B', reading[3]))[0]  # 4th byte scale factor (signed)
+                self.value = reading[5] << 8 | reading[4]  # 5th byte MSD, 4th byte LSD
+                self.value *= 10 ** self.scale_factor  # apply scale factor
+                if reading[1] == 5:  # status under zero
+                    self.value *= -1
+                # print(reading)
+                # print(self.status)
+                return {'value': self.value, 'unit': self.unit, 'status': self.status}
             else:
-                return {'value':-1,'unit':'?'}
+                return {'value': -1, 'unit': '?'}
         except IOError as ex:
             print(ex)
             print("Couldn't read from scale")
@@ -126,22 +157,29 @@ def main():
         s = Scale()
 
         while True:
-           weight = s.read()
-           if weight:
-                sys.stdout.write(str(weight['value']) + weight['unit'])
-           else:
+            weight = s.read()
+            if weight:
+                if weight['unit'] != '?':
+                    sys.stdout.write(str(weight['value']) + weight['unit'])# + ' Status: '+weight['status']+"\n")
+                else:
+                    continue
+            else:
                 raise IOError("Couldn't read from scale")
                 break
 
-           sys.stdout.flush()
-           time.sleep(0.5)
-           restart_line()
+            sys.stdout.flush()
+
+            # blah = input('Sample')
+            time.sleep(.5)
+
+            restart_line()
     except OSError as ex:
-        print(ex);
+        print(ex)
         exit()
     except IOError as ex:
         print(ex)
         exit()
+
 
 if __name__ == '__main__':
     main()
