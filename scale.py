@@ -86,7 +86,7 @@ class RadioShackScale(Scale):
         self.device = hid.device()
         try:
             self.device.open(self.vid, self.pid)
-            self.device..set_nonblocking(1)
+            self.device.set_nonblocking(1)
         except OSError as ex:
             print(ex)
             print("Couldn't connect to scale")
@@ -138,7 +138,7 @@ class StandardHIDScale(Scale):
         self.device = hid.device()
         try:
             self.device.open(self.vid, self.pid)
-            self.device..set_nonblocking(1)
+            self.device.set_nonblocking(1)
         except OSError as ex:
             print(ex)
             print("Couldn't connect to scale")
@@ -146,13 +146,14 @@ class StandardHIDScale(Scale):
     def read(self):
         try:
             reading = self.device.read(48)
-            if reading[0] == 3:  # 1st byte = weight report
+            # print(reading)
+            if reading and reading[0] == 3:  # 1st byte = weight report
                 self.status = scale_status[reading[1]]  # 2nd byte = status
                 self.unit = scale_units[reading[2]]  # 3rd byte = unit
                 self.scale_factor = unpack('b', pack('B', reading[3]))[0]  # 4th byte scale factor (signed)
-                self.value = reading[5] << 8 | reading[4]  # 5th byte MSD, 4th byte LSD
+                self.value = unpack('>h', pack('>H',reading[5] << 8 | reading[4]))[0]  # 5th byte MSD, 4th byte LSD
                 self.value *= 10 ** self.scale_factor  # apply scale factor
-                if reading[1] == 5:  # status under zero
+                if reading[1] == 5 and self.value > 0:  # status under zero (check to handle scales that explicitly supply negative readings)
                     self.value *= -1
                 # print(reading)
                 # print(self.status)
