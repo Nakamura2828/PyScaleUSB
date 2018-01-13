@@ -86,6 +86,7 @@ class RadioShackScale(Scale):
         self.device = hid.device()
         try:
             self.device.open(self.vid, self.pid)
+            self.device..set_nonblocking(1)
         except OSError as ex:
             print(ex)
             print("Couldn't connect to scale")
@@ -137,6 +138,7 @@ class StandardHIDScale(Scale):
         self.device = hid.device()
         try:
             self.device.open(self.vid, self.pid)
+            self.device..set_nonblocking(1)
         except OSError as ex:
             print(ex)
             print("Couldn't connect to scale")
